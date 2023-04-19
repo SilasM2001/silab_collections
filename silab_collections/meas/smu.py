@@ -30,7 +30,8 @@ def get_current_reading(smu):
         if typ == 'KEITHLEY_2410':
             return float(smu.get_current().split(',')[1])
         elif typ == 'KEITHLEY_6517A'.upper():
-            return float(smu.get_current().split(',')[0][:-4])
+            smu.select_current()                            #this should also be necessary 
+            return float(smu.get_read().split(',')[0][:-4]) #use smu.get_read()
         else:
             return float(smu.get_current().split(',')[0])  # [1]
 
@@ -47,7 +48,8 @@ def get_voltage_reading(smu):
         if typ == 'KEITHLEY_2410':
             return float(smu.get_voltage().split(',')[0])
         elif typ == 'KEITHLEY_6517A':
-            return float(smu.get_voltage().split(',')[0][:-4])
+            smu.select_voltage()                            #this should also be necessary
+            return float(smu.get_read().split(',')[0][:-4]) #use smu.get_read()
         else:
             return float(smu.get_voltage().split(',')[0])
 
