@@ -39,7 +39,7 @@ def _measure_and_write_current(smu, n_meas, bias, writer, pbar, log):
         pbar.write(log)
 
 
-def iv_scan(outfile, smu_config, bias_voltage, current_limit, bias_polarity=1, bias_steps=None, n_meas=1, smu_name=None, log_progress=False, linger=False, **writer_kwargs):
+def iv_scan(outfile, smu, bias_voltage, current_limit, bias_polarity=1, bias_steps=None, n_meas=1, smu_name=None, log_progress=False, linger=False, **writer_kwargs):
     """
     Basic IV scan using a single source-measure unit (SMU).
 
@@ -68,17 +68,20 @@ def iv_scan(outfile, smu_config, bias_voltage, current_limit, bias_polarity=1, b
     """
 
     # Initialize dut
-    dut = Dut(smu_config)
-    dut.init()
+    if isinstance(smu, Dut):
+        pass
+    else:
+        dut = Dut(smu)
+        dut.init()
 
     # Get SMU from dut
     # By name
     if smu_name:
-        smu = dut[smu_name]
+        actual_smu = dut[smu_name]
 
     # By being the only hardware
     elif len(dut._hardware_layer) == 1:
-        smu, = dut._hardware_layer.values()  # Fancy x, = container syntax
+        actual_smu, = dut._hardware_layer.values()  # Fancy x, = container syntax
 
     else:
         msg = "*smu_config* contains more than 1 hardware driver, cannot identify SMU."
@@ -92,7 +95,7 @@ def iv_scan(outfile, smu_config, bias_voltage, current_limit, bias_polarity=1, b
     # Prepare comments
     # Check if comments are in writer_kwargs and replace if so
     if 'comments' not in writer_kwargs:
-        writer_kwargs['comments'] = [f'SMU: {smu.get_name().strip()}',
+        writer_kwargs['comments'] = [f'SMU: {actual_smu.get_name().strip()}',
                                      f'Current limit: {current_limit:.2E} A',
                                      f'Measurements per voltage step: {n_meas}',
                                      f"Bias voltages: ({', '.join(str(bv) for bv in bias_volts)}) V"]
@@ -107,10 +110,10 @@ def iv_scan(outfile, smu_config, bias_voltage, current_limit, bias_polarity=1, b
     data_writer = DataWriter(outfile=outfile, **writer_kwargs)
 
     # Setup our SMU
-    smu_utils.setup_voltage_source(smu=smu, bias_voltage=bias_volts, current_limit=current_limit)
+    smu_utils.setup_voltage_source(smu=actual_smu, bias_voltage=bias_volts, current_limit=current_limit)
 
     # Ensure we start from 0 volts
-    smu_utils.ramp_voltage(smu=smu, target_voltage=0)
+    smu_utils.ramp_voltage(smu=actual_smu, target_voltage=0)
     
     try:
 
@@ -123,10 +126,10 @@ def iv_scan(outfile, smu_config, bias_voltage, current_limit, bias_polarity=1, b
             for bias in pbar_volts:
                 
                 # Set next voltage
-                smu.set_voltage(bias)
+                actual_smu.set_voltage(bias)
     
                 # Read current 
-                current = smu_utils.get_current_reading(smu=smu)
+                current = smu_utils.get_current_reading(smu=actual_smu)
 
                 # Check if we are above the current limit
                 if current  > current_limit and current < 1e37:
@@ -136,7 +139,7 @@ def iv_scan(outfile, smu_config, bias_voltage, current_limit, bias_polarity=1, b
                 # Let the voltage settle
                 sleep(meas.BIAS_SETTLE_DELAY)
             
-                _measure_and_write_current(smu=smu, n_meas=n_meas,bias=bias, writer=writer, pbar=pbar_volts, log=log_progress)
+                _measure_and_write_current(smu=actual_smu, n_meas=n_meas,bias=bias, writer=writer, pbar=pbar_volts, log=log_progress)
 
             # Loop did not break so there is no current exceeded
             else:
@@ -170,18 +173,18 @@ def iv_scan(outfile, smu_config, bias_voltage, current_limit, bias_polarity=1, b
                     # Start lingering
                     try:
                         for _ in pbar_linger:
-                            _measure_and_write_current(smu=smu, n_meas=n_meas,bias=bias, writer=writer, pbar=pbar_linger, log=log_progress)
+                            _measure_and_write_current(smu=actual_smu, n_meas=n_meas,bias=bias, writer=writer, pbar=pbar_linger, log=log_progress)
                         pbar_linger.close()
                     except KeyboardInterrupt:
                         # Discard anyting on the transfer layer buffer
-                        smu._intf.read()
+                        actual_smu._intf.read()
 
     finally:
 
         # Ensure we go back to 0 volts with the same stepping as IV measurements
-        smu_utils.ramp_voltage(smu=smu, target_voltage=0, steps=len(bias_volts))
+        smu_utils.ramp_voltage(smu=actual_smu, target_voltage=0, steps=len(bias_volts))
 
-        if hasattr(smu, 'off'):
-            smu.off()
+        if hasattr(actual_smu, 'off'):
+            actual_smu.off()
 
         dut.close()
