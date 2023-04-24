@@ -120,7 +120,7 @@ def setup_voltage_source(smu, bias_voltage, current_limit):
 
     # Adjust the SMU from basil if possible
     # Ensure we are in voltage sourcing mode
-    if hasattr(smu, 'source_voltage'):
+    if hasattr(smu, 'source_volt'):
         smu.source_volt()
     
     # Ensure compliance limit
